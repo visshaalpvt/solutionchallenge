@@ -1,9 +1,12 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { Bell, Search, Settings } from 'lucide-react';
+import { Bell, Search, Settings, ShieldCheck, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from '../../stores/authStore';
 import useNotificationStore from '../../stores/notificationStore';
+import useTasksStore from '../../stores/tasksStore';
+import { Trophy } from 'lucide-react';
+import useUIStore from '../../stores/uiStore';
 
 const pageTitles = {
   '/admin': 'Dashboard',
@@ -22,22 +25,49 @@ const pageTitles = {
 const TopBar = () => {
   const location = useLocation();
   const { user } = useAuthStore();
+  const tasks = useTasksStore(s => s.tasks);
   const { togglePanel, getUnreadCount } = useNotificationStore();
+  const { sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const title = pageTitles[location.pathname] || 'Dashboard';
   const unreadCount = getUnreadCount();
+
+  const completedCount = tasks.filter(t => t.assignedTo === user?.uid && t.status === 'completed').length;
+  const getRank = (count) => {
+    if (count >= 10) return { label: 'Legend', color: 'bg-purple-50 text-purple-600', border: 'border-purple-100' };
+    if (count >= 5) return { label: 'Elite', color: 'bg-indigo-50 text-indigo-600', border: 'border-indigo-100' };
+    if (count >= 1) return { label: 'Bronze', color: 'bg-amber-50 text-amber-600', border: 'border-amber-100' };
+    return { label: 'Rookie', color: 'bg-slate-50 text-slate-400', border: 'border-slate-100' };
+  };
+  const rank = getRank(completedCount);
 
   return (
     <header
       id="top-bar"
-      className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30"
+      className="h-20 flex items-center justify-between px-4 md:px-8 bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-30"
     >
       <div className="flex items-center gap-4">
+        <button 
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="lg:hidden p-2 rounded-xl text-slate-400 hover:bg-slate-50 transition-all"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
         <div className="h-4 w-px bg-slate-200 hidden sm:block" />
         <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
           <span className="text-indigo-600">{user?.role}</span>
           <span>•</span>
           <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+        </div>
+        {user?.role === 'volunteer' && (
+          <div className={`px-3 py-1 rounded-full border ${rank.border} ${rank.color} flex items-center gap-1.5 shadow-sm`}>
+            <Trophy className="w-3 h-3" />
+            <span className="text-[10px] font-black uppercase tracking-widest">{rank.label}</span>
+          </div>
+        )}
+        <div className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 flex items-center gap-1.5 shadow-sm">
+           <ShieldCheck className="w-3 h-3 text-emerald-500 animate-pulse" />
+           <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Secured</span>
         </div>
       </div>
 

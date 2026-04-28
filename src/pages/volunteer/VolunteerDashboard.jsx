@@ -1,24 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Briefcase, CheckCircle2, Clock, MapPin, Search, ArrowRight, Star, Heart, Bell, AlertTriangle, Sparkles } from 'lucide-react';
+import { Briefcase, CheckCircle2, Clock, MapPin, Search, ArrowRight, Star, Heart, Bell, AlertTriangle, Sparkles, Trophy } from 'lucide-react';
 import StatCard from '../../components/ui/StatCard';
 import Card from '../../components/ui/Card';
 import { StatusBadge } from '../../components/ui/Badge';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
+import { useNavigate } from 'react-router-dom';
+import RewardsModal from '../../components/rewards/RewardsModal';
 import useAuthStore from '../../stores/authStore';
 import useTasksStore from '../../stores/tasksStore';
 import useNeedsStore from '../../stores/needsStore';
 import useNotificationStore from '../../stores/notificationStore';
-import { useNavigate } from 'react-router-dom';
+import useVolunteersStore from '../../stores/volunteersStore';
 
 const VolunteerDashboard = () => {
   const user = useAuthStore(s => s.user);
   const tasks = useTasksStore(s => s.tasks);
   const needs = useNeedsStore(s => s.needs);
+  const volunteers = useVolunteersStore(s => s.volunteers);
   const notifications = useNotificationStore(s => s.notifications);
   const markRead = useNotificationStore(s => s.markRead);
   const navigate = useNavigate();
+  const [rewardsOpen, setRewardsOpen] = useState(false);
 
   const myTasks = tasks.filter(t => t.assignedTo === user?.uid);
   const activeTasks = myTasks.filter(t => t.status === 'assigned');
@@ -258,6 +262,45 @@ const VolunteerDashboard = () => {
             )}
           </div>
         </Card>
+
+        {/* 🏆 VOLUNTEER LEADERBOARD */}
+        <Card className="border-slate-100 shadow-sm overflow-hidden p-0">
+           <div className="px-6 py-5 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                 <Trophy className="w-5 h-5 text-amber-500" />
+                 <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Community Leaders</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Top Impact Contributors</p>
+                 </div>
+              </div>
+           </div>
+           <div className="divide-y divide-slate-50">
+              {volunteers.sort((a,b) => (b.tasksCompleted || 0) - (a.tasksCompleted || 0)).slice(0, 3).map((vol, i) => (
+                 <div key={vol.uid || vol.id} className="px-6 py-4 flex items-center justify-between group hover:bg-slate-50/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                       <span className={`text-lg font-black ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : 'text-amber-700'}`}>
+                          #{i + 1}
+                       </span>
+                       <div className="w-10 h-10 rounded-2xl bg-indigo-50 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
+                          {vol.photoURL ? (
+                             <img src={vol.photoURL} alt={vol.name} className="w-full h-full object-cover" />
+                          ) : (
+                             <span className="text-sm font-black text-indigo-600">{vol.name?.[0]}</span>
+                          )}
+                       </div>
+                       <div>
+                          <p className="text-sm font-bold text-slate-900">{vol.name} {vol.uid === user?.uid && '(You)'}</p>
+                          <p className="text-[10px] font-medium text-slate-400">{vol.zone || 'Global'}</p>
+                       </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-sm font-black text-slate-900">{vol.tasksCompleted || 0}</p>
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Tasks</p>
+                    </div>
+                 </div>
+              ))}
+           </div>
+        </Card>
       </div>
 
       {/* Rewards Banner */}
@@ -270,11 +313,21 @@ const VolunteerDashboard = () => {
                  You've completed <span className="font-black text-white">{completedTasks.length} tasks</span> so far. Keep it up to unlock new volunteer badges and community rewards.
                </p>
             </div>
-            <Button variant="secondary" className="bg-white text-indigo-600 border-none px-10 py-6 rounded-2xl font-black shadow-xl">
-               View Rewards
+            <Button 
+                variant="secondary" 
+                className="bg-white text-indigo-600 border-none px-10 py-6 rounded-2xl font-black shadow-xl"
+                onClick={() => setRewardsOpen(true)}
+             >
+                View Rewards
             </Button>
          </div>
       </div>
+
+      <RewardsModal 
+         isOpen={rewardsOpen} 
+         onClose={() => setRewardsOpen(false)} 
+         completedCount={completedTasks.length} 
+       />
     </motion.div>
   );
 };

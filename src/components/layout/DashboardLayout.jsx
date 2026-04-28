@@ -44,17 +44,17 @@ const DashboardLayout = () => {
   }, [initNeeds, initTasks, initVolunteers, initNotifications, user?.uid, user?.role]);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex">
       <Sidebar />
       
       <div 
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-500 ease-in-out ${
-          collapsed ? 'ml-[80px]' : 'ml-[260px]'
-        }`}
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out ${
+          collapsed ? 'lg:ml-[80px]' : 'lg:ml-[260px]'
+        } ml-0`}
       >
         <TopBar />
         <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
-          <div className="max-w-7xl mx-auto p-6 lg:p-10 animate-fade-in">
+          <div className="w-full p-4 md:p-8 lg:p-10 animate-fade-in">
             <Outlet />
           </div>
         </main>

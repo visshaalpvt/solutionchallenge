@@ -64,7 +64,7 @@ const TaskForm = ({ isOpen, onClose, prefillNeed = null }) => {
       isOpen={isOpen}
       onClose={onClose}
       title="Create Operation Task"
-      size="lg"
+      size="xl"
       id="task-form-modal"
     >
       <form onSubmit={handleSubmit} className="space-y-6">

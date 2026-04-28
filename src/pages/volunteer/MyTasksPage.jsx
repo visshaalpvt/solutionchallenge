@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, Briefcase, History } from 'lucide-react';
+import { CheckCircle2, Clock, Briefcase, History, Award } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import { StatusBadge } from '../../components/ui/Badge';
@@ -8,8 +8,13 @@ import EmptyState from '../../components/ui/EmptyState';
 import useAuthStore from '../../stores/authStore';
 import useTasksStore from '../../stores/tasksStore';
 import { completeTask } from '../../services/firestoreService';
+import CertificateModal from '../../components/rewards/CertificateModal';
+import { useState } from 'react';
+import confetti from 'canvas-confetti';
 
 const MyTasksPage = () => {
+  const [showCert, setShowCert] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
   const user = useAuthStore(s => s.user);
   const tasks = useTasksStore(s => s.tasks);
   const myTasks = tasks.filter(t => t.assignedTo === user?.uid);
@@ -18,8 +23,33 @@ const MyTasksPage = () => {
 
   const handleComplete = async (task) => {
     if (user?.uid) {
-      await completeTask(task.id, user.uid);
+      try {
+        // 🎉 Trigger Celebration immediately
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#4f46e5', '#9333ea', '#10b981']
+        });
+
+        await completeTask(task.id, user.uid);
+        
+        // Small delay to ensure state is ready
+        setTimeout(() => {
+          setSelectedTask(task);
+          setShowCert(true);
+        }, 500);
+
+      } catch (error) {
+        console.error('Completion Error:', error);
+        alert('Could not complete task. Please try again.');
+      }
     }
+  };
+
+  const openCert = (task) => {
+    setSelectedTask(task);
+    setShowCert(true);
   };
 
   const containerVariants = {
@@ -126,18 +156,33 @@ const MyTasksPage = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {completed.map(task => (
-              <Card key={task.id} className="opacity-75 grayscale hover:grayscale-0 hover:opacity-100 transition-all border-slate-100 bg-slate-50/30 p-6 rounded-[1.5rem]">
-                <div className="flex items-center justify-between mb-3">
-                  <StatusBadge status={task.status} />
-                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              <Card key={task.id} className="opacity-75 grayscale hover:grayscale-0 hover:opacity-100 transition-all border-slate-100 bg-slate-50/30 p-6 rounded-[1.5rem] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <StatusBadge status={task.status} />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <h4 className="text-base font-bold text-slate-900 mb-1">{task.title}</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-4">{task.description}</p>
                 </div>
-                <h4 className="text-base font-bold text-slate-900 mb-1">{task.title}</h4>
-                <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{task.description}</p>
+                <button 
+                  onClick={() => openCert(task)}
+                  className="flex items-center gap-2 text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-700 transition-colors"
+                >
+                  <Award size={14} /> View Certificate
+                </button>
               </Card>
             ))}
           </div>
         )}
       </div>
+
+      <CertificateModal 
+        isOpen={showCert} 
+        onClose={() => setShowCert(false)} 
+        task={selectedTask} 
+        userName={user?.name || 'Humanitarian Volunteer'} 
+      />
     </motion.div>
   );
 };

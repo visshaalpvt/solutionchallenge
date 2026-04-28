@@ -90,7 +90,7 @@ const NeedForm = ({ isOpen, onClose }) => {
       isOpen={isOpen} 
       onClose={handleClose} 
       title={step === 1 ? 'Report Community Need' : 'AI Analysis Results'} 
-      size="lg"
+      size="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {step === 1 ? (

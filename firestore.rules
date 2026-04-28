@@ -2,10 +2,49 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow anyone to read/write for the demo.
-    // For production, this should be restricted to authenticated users.
-    match /{document=**} {
-      allow read, write: if true;
+    
+    // Helper: Is the user authenticated?
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Does the user have a specific role?
+    function hasRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    // --- USERS COLLECTION ---
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == userId || hasRole('admin');
+    }
+
+    // --- NEEDS COLLECTION ---
+    match /needs/{needId} {
+      allow read: if isAuthenticated();
+      // Only Admins or AI-Service accounts can create/delete needs
+      allow create, delete: if hasRole('admin');
+      allow update: if hasRole('admin') || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'assignedTo']));
+    }
+
+    // --- TASKS COLLECTION ---
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      // Only Admins can create tasks
+      allow create, delete: if hasRole('admin');
+      // Volunteers can only update the status of tasks assigned to them
+      allow update: if hasRole('admin') || (
+        isAuthenticated() && 
+        resource.data.assignedTo == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt'])
+      );
+    }
+
+    // --- NOTIFICATIONS COLLECTION ---
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if hasRole('admin');
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
     }
   }
 }

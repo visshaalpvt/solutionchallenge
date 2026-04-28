@@ -15,6 +15,7 @@ import {
   Bot,
   ChevronRight,
   Zap,
+  CheckCircle2,
 } from 'lucide-react';
 import StatCard from '../../components/ui/StatCard';
 import Card from '../../components/ui/Card';
@@ -160,7 +161,7 @@ const AdminDashboard = () => {
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Needs — 2 cols */}
-        <motion.div variants={itemVariants} className="lg:col-span-2">
+        <motion.div variants={itemVariants} className="lg:col-span-2 space-y-8">
           <Card hover={false} padding="p-0" className="overflow-hidden border-slate-200 shadow-sm">
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/30">
               <div>
@@ -207,14 +208,6 @@ const AdminDashboard = () => {
                            </p>
                            <span className="text-slate-200">•</span>
                            <p className="text-xs text-slate-400 font-medium">{need.category}</p>
-                           {need.aiSource && (
-                             <>
-                               <span className="text-slate-200">•</span>
-                               <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-[9px] font-bold text-indigo-600 uppercase flex items-center gap-0.5">
-                                 <Bot className="w-2.5 h-2.5" /> {need.aiSource}
-                               </span>
-                             </>
-                           )}
                         </div>
                       </div>
                     </div>
@@ -229,13 +222,45 @@ const AdminDashboard = () => {
                 ))
               )}
             </div>
-            {recentNeeds.length > 0 && (
-              <div className="p-4 bg-slate-50/50 border-t border-slate-100 text-center">
-                 <button onClick={() => navigate('/admin/needs')} className="text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors">
-                   Load more activity...
-                 </button>
-              </div>
-            )}
+          </Card>
+
+          {/* ⚡ LIVE OPERATIONAL LOG */}
+          <Card className="border-slate-200 shadow-sm">
+             <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 uppercase tracking-wider">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  Live Operational Log
+                </h3>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase">Live Feed</span>
+                </span>
+             </div>
+             <div className="space-y-6">
+                {tasks.filter(t => t.status !== 'open').slice(0, 4).map((task, i) => (
+                   <div key={task.id} className="flex gap-4 relative">
+                      {i !== 3 && <div className="absolute left-[11px] top-8 bottom-[-24px] w-0.5 bg-slate-100" />}
+                      <div className={`w-6 h-6 rounded-full flex-shrink-0 flex items-center justify-center z-10 ${
+                        task.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'
+                      }`}>
+                         {task.status === 'completed' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
+                      </div>
+                      <div className="flex-1">
+                         <p className="text-xs font-bold text-slate-900">
+                            {task.status === 'completed' ? 'Task Completed' : 'Task In Progress'} 
+                            <span className="text-slate-400 font-medium ml-1">in {task.zone}</span>
+                         </p>
+                         <p className="text-[11px] text-slate-500 mt-0.5">{task.title}</p>
+                         <p className="text-[9px] font-black text-indigo-500 uppercase mt-2 tracking-widest">
+                            {task.status === 'assigned' ? 'Volunteer En Route' : 'Impact Logged'}
+                         </p>
+                      </div>
+                   </div>
+                ))}
+                {tasks.length === 0 && (
+                   <p className="text-center py-4 text-xs font-bold text-slate-300 uppercase italic">Awaiting operational movements...</p>
+                )}
+             </div>
           </Card>
         </motion.div>
 
@@ -323,6 +348,42 @@ const AdminDashboard = () => {
               <button onClick={() => navigate('/admin/matching')} className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1 mx-auto">
                 <Zap className="w-3 h-3" /> Match Volunteers to Tasks
               </button>
+            </div>
+          </Card>
+
+          {/* 📍 ZONE DISTRIBUTION HEATMAP */}
+          <Card className="border-slate-200 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-900 mb-6 flex items-center gap-2 uppercase tracking-wider">
+              <MapPin className="w-4 h-4 text-indigo-600" />
+              Regional Heatmap
+            </h3>
+            <div className="space-y-3">
+              {['North Zone', 'South Zone', 'East Zone', 'West Zone', 'Central Zone'].map(z => {
+                const count = needs.filter(n => n.zone === z).length;
+                const percentage = needs.length > 0 ? (count / needs.length) * 100 : 0;
+                const isEastOnProcess = tasks.some(t => t.zone === 'East Zone' && t.status === 'assigned');
+                
+                return (
+                  <div key={z} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold">
+                      <span className="text-slate-600 flex items-center gap-1">
+                        {z}
+                        {z === 'East Zone' && isEastOnProcess && (
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                        )}
+                      </span>
+                      <span className="text-slate-400">{count} Items</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                       <motion.div 
+                         initial={{ width: 0 }}
+                         animate={{ width: `${percentage}%` }}
+                         className={`h-full rounded-full ${z === 'East Zone' && isEastOnProcess ? 'bg-indigo-600 shadow-[0_0_8px_rgba(79,70,229,0.5)]' : 'bg-slate-300'}`}
+                       />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Card>
 

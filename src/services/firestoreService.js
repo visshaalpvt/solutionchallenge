@@ -1,4 +1,19 @@
-import { db } from '../config/firebase';
+import { auth, db } from '../config/firebase';
+
+// 🛡️ SECURITY: Application-Level Rate Limiter
+const requestLogs = new Map();
+const RATE_LIMIT_MS = 2000; // 2 seconds between writes
+
+const checkRateLimit = (action) => {
+  const now = Date.now();
+  const lastRequest = requestLogs.get(action) || 0;
+  if (now - lastRequest < RATE_LIMIT_MS) {
+    console.error(`[SECURITY] Rate limit exceeded for action: ${action}`);
+    throw new Error('Security Alert: Multiple rapid requests detected. Please wait.');
+  }
+  requestLogs.set(action, now);
+};
+
 import { 
   collection, 
   addDoc, 
@@ -31,6 +46,7 @@ const withTimeout = (promise, ms = 10000) => {
 // ==================== NEEDS ====================
 
 export const createNeed = async (needData) => {
+  checkRateLimit('createNeed');
   try {
     const docRef = await withTimeout(addDoc(collection(db, 'needs'), {
       ...needData,
@@ -45,10 +61,19 @@ export const createNeed = async (needData) => {
 };
 
 export const subscribeToNeeds = (callback) => {
-  const q = query(collection(db, 'needs'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snapshot) => {
-    const needs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    callback(needs);
+  // Use a simpler query first to ensure everything shows up
+  const q = query(collection(db, 'needs'));
+  return onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+    const needs = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return { 
+        id: doc.id, 
+        ...data,
+        createdAt: data.createdAt || { toDate: () => new Date() }
+      };
+    });
+    // Sort manually in JS for now to avoid Firestore index errors
+    callback(needs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
   });
 };
 
@@ -64,6 +89,7 @@ export const deleteNeed = async (needId) => {
 // ==================== TASKS ====================
 
 export const createTask = async (taskData) => {
+  checkRateLimit('createTask');
   try {
     // 1. Create the task
     const docRef = await withTimeout(addDoc(collection(db, 'tasks'), {
@@ -89,10 +115,17 @@ export const createTask = async (taskData) => {
 };
 
 export const subscribeToTasks = (callback) => {
-  const q = query(collection(db, 'tasks'), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snapshot) => {
-    const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    callback(tasks);
+  const q = query(collection(db, 'tasks'));
+  return onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+    const tasks = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return { 
+        id: doc.id, 
+        ...data,
+        createdAt: data.createdAt || { toDate: () => new Date() }
+      };
+    });
+    callback(tasks.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
   });
 };
 
@@ -129,7 +162,8 @@ export const acceptTask = async (taskId, volunteerId) => {
   return assignTask(taskId, volunteerId);
 };
 
-export const completeTask = async (taskId, volunteerId) => {
+export const completeTask = async (taskId, userId) => {
+  checkRateLimit(`completeTask-${taskId}`);
   const taskRef = doc(db, 'tasks', taskId);
   await updateDoc(taskRef, {
     status: 'completed',
@@ -137,7 +171,7 @@ export const completeTask = async (taskId, volunteerId) => {
   });
 
   // Update volunteer stats
-  const userRef = doc(db, 'users', volunteerId);
+  const userRef = doc(db, 'users', userId);
   const userSnap = await getDoc(userRef);
   if (userSnap.exists()) {
     const active = userSnap.data().tasksActive || 0;
@@ -157,6 +191,7 @@ export const getUser = async (uid) => {
 };
 
 export const updateUser = async (uid, data) => {
+  checkRateLimit(`updateUser-${uid}`);
   const userRef = doc(db, 'users', uid);
   return updateDoc(userRef, data);
 };

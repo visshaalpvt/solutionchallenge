@@ -71,7 +71,7 @@ const Sidebar = () => {
             {isAdmin ? 'Administration' : 'Volunteer'}
           </p>
         )}
-        
+
         {links.map((link) => (
           <NavLink
             key={link.to}
@@ -80,10 +80,9 @@ const Sidebar = () => {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold
               transition-all duration-200 group relative
-              ${
-                isActive
-                  ? 'bg-indigo-50 text-indigo-600 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              ${isActive
+                ? 'bg-indigo-50 text-indigo-600 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }
               ${collapsed ? 'justify-center' : ''}
               `
