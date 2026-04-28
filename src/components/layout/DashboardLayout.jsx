@@ -2,9 +2,13 @@ import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import NotificationPanel from '../ui/NotificationPanel';
+import ToastNotification from '../ui/ToastNotification';
 import useNeedsStore from '../../stores/needsStore';
 import useTasksStore from '../../stores/tasksStore';
 import useVolunteersStore from '../../stores/volunteersStore';
+import useNotificationStore from '../../stores/notificationStore';
+import useAuthStore from '../../stores/authStore';
 import useUIStore from '../../stores/uiStore';
 
 const DashboardLayout = () => {
@@ -12,14 +16,21 @@ const DashboardLayout = () => {
   const initNeeds = useNeedsStore((s) => s.initSubscription);
   const initTasks = useTasksStore((s) => s.initSubscription);
   const initVolunteers = useVolunteersStore((s) => s.initSubscription);
+  const initNotifications = useNotificationStore((s) => s.initSubscription);
+  const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
-    let unsubNeeds, unsubTasks, unsubVolunteers;
+    let unsubNeeds, unsubTasks, unsubVolunteers, unsubNotifications;
 
     try {
       unsubNeeds = initNeeds();
       unsubTasks = initTasks();
       unsubVolunteers = initVolunteers();
+
+      // Subscribe to notifications for this user
+      if (user?.uid) {
+        unsubNotifications = initNotifications(user.uid, user.role);
+      }
     } catch (error) {
       console.warn('Subscription failed, using offline data:', error.message);
     }
@@ -28,8 +39,9 @@ const DashboardLayout = () => {
       if (typeof unsubNeeds === 'function') unsubNeeds();
       if (typeof unsubTasks === 'function') unsubTasks();
       if (typeof unsubVolunteers === 'function') unsubVolunteers();
+      if (typeof unsubNotifications === 'function') unsubNotifications();
     };
-  }, [initNeeds, initTasks, initVolunteers]);
+  }, [initNeeds, initTasks, initVolunteers, initNotifications, user?.uid, user?.role]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex overflow-hidden">
@@ -47,6 +59,12 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
+
+      {/* Notification Panel (slide-in from right) */}
+      <NotificationPanel />
+      
+      {/* Toast Notifications (top-right floating) */}
+      <ToastNotification />
     </div>
   );
 };

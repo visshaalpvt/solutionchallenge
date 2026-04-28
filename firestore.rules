@@ -23,7 +23,7 @@ service cloud.firestore {
     match /users/{userId} {
       // Anyone authenticated can read user profiles
       allow read: if isAuthenticated();
-      // Users can update their own profile (skills, availability, zone, role)
+      // Users can update their own profile; admins can update any user
       allow update: if isOwner(userId) || isAdmin();
       // Only allow create during sign-up (auth uid must match doc id)
       allow create: if isOwner(userId);
@@ -52,6 +52,18 @@ service cloud.firestore {
         (isAuthenticated() && resource.data.assignedTo == request.auth.uid) ||
         (isAuthenticated() && resource.data.status == 'open');
       // Only admin can delete tasks
+      allow delete: if isAdmin();
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can read notifications addressed to them or to all_volunteers
+      allow read: if isAuthenticated();
+      // Any authenticated user can create notifications (triggered by service layer)
+      allow create: if isAuthenticated();
+      // Users can update (mark as read) their own notifications
+      allow update: if isAuthenticated();
+      // Only admin can delete notifications
       allow delete: if isAdmin();
     }
   }

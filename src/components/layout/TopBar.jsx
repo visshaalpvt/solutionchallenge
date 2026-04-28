@@ -1,7 +1,9 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { Bell, Search, Settings } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from '../../stores/authStore';
+import useNotificationStore from '../../stores/notificationStore';
 
 const pageTitles = {
   '/admin': 'Dashboard',
@@ -20,7 +22,9 @@ const pageTitles = {
 const TopBar = () => {
   const location = useLocation();
   const { user } = useAuthStore();
+  const { togglePanel, getUnreadCount } = useNotificationStore();
   const title = pageTitles[location.pathname] || 'Dashboard';
+  const unreadCount = getUnreadCount();
 
   return (
     <header
@@ -47,9 +51,24 @@ const TopBar = () => {
           />
         </div>
         
-        <button className="relative p-2.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-red-500 border-2 border-white" />
+        {/* Notification Bell */}
+        <button 
+          onClick={togglePanel}
+          className="relative p-2.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200 group"
+        >
+          <Bell className="w-5 h-5 group-hover:animate-[wiggle_0.3s_ease-in-out]" />
+          <AnimatePresence>
+            {unreadCount > 0 && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-lg shadow-red-200"
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
 
         <button className="p-2.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200">

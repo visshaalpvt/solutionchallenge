@@ -14,6 +14,12 @@ import {
   serverTimestamp,
   increment,
 } from 'firebase/firestore';
+import {
+  notifyVolunteersOfNewTask,
+  notifyTaskAssigned,
+  notifyTaskCompleted,
+  notifyCriticalNeed,
+} from './notificationService';
 
 // Safety wrapper — returns noop unsubscribe if Firestore isn't available
 const safeSubscribe = (queryFn, callback) => {
@@ -48,6 +54,20 @@ export const createNeed = async (needData) => {
     status: 'open',
     createdAt: serverTimestamp(),
   });
+
+  // If critical/high urgency, notify volunteers in that zone
+  if (['critical', 'high'].includes(needData.urgencyLabel)) {
+    try {
+      const volunteers = await getAllVolunteers();
+      await notifyCriticalNeed(
+        { ...needData, id: docRef.id },
+        volunteers
+      );
+    } catch (err) {
+      console.warn('Failed to send need notifications:', err.message);
+    }
+  }
+
   return docRef.id;
 };
 
@@ -134,6 +154,17 @@ export const createTask = async (taskData) => {
     });
   }
 
+  // 🔔 Notify matching volunteers about the new task
+  try {
+    const volunteers = await getAllVolunteers();
+    await notifyVolunteersOfNewTask(
+      { ...taskData, id: docRef.id },
+      volunteers
+    );
+  } catch (err) {
+    console.warn('Failed to send task notifications:', err.message);
+  }
+
   return docRef.id;
 };
 
@@ -150,6 +181,11 @@ export const updateTask = async (taskId, data) => {
 
 export const assignTask = async (taskId, volunteerId) => {
   if (!db) return;
+  
+  // Get the task title for notification
+  const taskSnap = await getDoc(doc(db, 'tasks', taskId));
+  const taskTitle = taskSnap.exists() ? taskSnap.data().title : 'Unknown Task';
+
   await updateDoc(doc(db, 'tasks', taskId), {
     assignedTo: volunteerId,
     status: 'assigned',
@@ -159,12 +195,25 @@ export const assignTask = async (taskId, volunteerId) => {
   await updateDoc(doc(db, 'users', volunteerId), {
     tasksActive: increment(1),
   });
+
+  // 🔔 Notify the volunteer they've been assigned
+  try {
+    await notifyTaskAssigned(taskTitle, volunteerId, taskId);
+  } catch (err) {
+    console.warn('Failed to send assignment notification:', err.message);
+  }
 };
 
 export const completeTask = async (taskId, volunteerId) => {
   if (!db) return;
+
+  // Get task data for notification
+  const taskSnap = await getDoc(doc(db, 'tasks', taskId));
+  const taskData = taskSnap.exists() ? taskSnap.data() : {};
+
   await updateDoc(doc(db, 'tasks', taskId), {
     status: 'completed',
+    completedAt: serverTimestamp(),
   });
 
   // Update volunteer stats
@@ -173,20 +222,39 @@ export const completeTask = async (taskId, volunteerId) => {
     tasksCompleted: increment(1),
   });
 
+  // 🔔 Notify admin that task is completed
+  try {
+    const volSnap = await getDoc(doc(db, 'users', volunteerId));
+    const volunteerName = volSnap.exists() ? volSnap.data().name : 'A volunteer';
+
+    // Find admin users to notify
+    const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+    const adminSnap = await getDocs(adminQuery);
+    
+    for (const adminDoc of adminSnap.docs) {
+      await notifyTaskCompleted(
+        taskData.title || 'Unknown Task',
+        volunteerName,
+        adminDoc.id,
+        taskId
+      );
+    }
+  } catch (err) {
+    console.warn('Failed to send completion notification:', err.message);
+  }
+
   // Check if all tasks for the need are completed
-  const taskSnap = await getDoc(doc(db, 'tasks', taskId));
-  const task = taskSnap.data();
-  if (task?.needId) {
+  if (taskData?.needId) {
     const tasksQuery = query(
       collection(db, 'tasks'),
-      where('needId', '==', task.needId)
+      where('needId', '==', taskData.needId)
     );
     const tasksSnap = await getDocs(tasksQuery);
     const allCompleted = tasksSnap.docs.every(
       (d) => d.data().status === 'completed'
     );
     if (allCompleted) {
-      await updateDoc(doc(db, 'needs', task.needId), {
+      await updateDoc(doc(db, 'needs', taskData.needId), {
         status: 'resolved',
       });
     }
@@ -195,6 +263,11 @@ export const completeTask = async (taskId, volunteerId) => {
 
 export const acceptTask = async (taskId, volunteerId) => {
   if (!db) return;
+
+  // Get task title for notification
+  const taskSnap = await getDoc(doc(db, 'tasks', taskId));
+  const taskTitle = taskSnap.exists() ? taskSnap.data().title : 'Unknown Task';
+
   await updateDoc(doc(db, 'tasks', taskId), {
     assignedTo: volunteerId,
     status: 'assigned',
@@ -202,6 +275,13 @@ export const acceptTask = async (taskId, volunteerId) => {
   await updateDoc(doc(db, 'users', volunteerId), {
     tasksActive: increment(1),
   });
+
+  // 🔔 Notify the volunteer about their acceptance confirmation
+  try {
+    await notifyTaskAssigned(taskTitle, volunteerId, taskId);
+  } catch (err) {
+    console.warn('Failed to send acceptance notification:', err.message);
+  }
 };
 
 // ==================== USERS ====================
