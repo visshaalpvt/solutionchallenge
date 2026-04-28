@@ -1,10 +1,9 @@
 import { create } from 'zustand';
 import {
   subscribeToNotifications,
-  subscribeToAdminNotifications,
   markNotificationRead,
-  markAllNotificationsRead,
-} from '../services/notificationService';
+  clearAllNotifications,
+} from '../services/firestoreService';
 
 const useNotificationStore = create((set, get) => ({
   notifications: [],
@@ -33,19 +32,19 @@ const useNotificationStore = create((set, get) => ({
   },
 
   markAllRead: async (userId) => {
-    await markAllNotificationsRead(userId);
+    // Mark all as read locally
+    const notifs = get().notifications;
+    for (const n of notifs) {
+      if (!n.read) await markNotificationRead(n.id);
+    }
     set((s) => ({
       notifications: s.notifications.map((n) => ({ ...n, read: true })),
     }));
   },
 
   initSubscription: (userId, role) => {
-    if (role === 'admin') {
-      return subscribeToAdminNotifications((notifications) => {
-        set({ notifications, loading: false });
-      });
-    }
-    return subscribeToNotifications(userId, (notifications) => {
+    // Both admin and volunteer use the same subscription now
+    return subscribeToNotifications(userId, role, (notifications) => {
       const prev = get().notifications;
       set({ notifications, loading: false });
       
@@ -56,7 +55,6 @@ const useNotificationStore = create((set, get) => ({
         );
         newNotifs.forEach((n) => {
           if (!n.read) {
-            // Trigger the toast callback if set
             const onNew = get()._onNewNotification;
             if (onNew) onNew(n);
           }
