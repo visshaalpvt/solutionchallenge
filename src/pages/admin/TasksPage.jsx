@@ -134,7 +134,7 @@ const TasksPage = () => {
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Top Matches</p>
               {assignModal.matched.length === 0 ? (
                 <div className="text-center py-12 px-6 rounded-3xl bg-slate-50 border border-slate-100">
-                  <p className="text-sm font-bold text-slate-500">No volunteers available in this zone.</p>
+                  <p className="text-sm font-bold text-slate-500">No registered volunteers yet. Volunteers will appear here once they log in.</p>
                 </div>
               ) : (
                 <div className="space-y-3 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">

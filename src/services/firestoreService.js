@@ -55,18 +55,13 @@ export const createNeed = async (needData) => {
     createdAt: serverTimestamp(),
   });
 
-  // Notify ALL volunteers about this need (zone-independent)
-  try {
-    const volunteers = await getAllVolunteers();
+  // 🔔 Fire-and-forget: Notify volunteers in the background (don't block save)
+  getAllVolunteers().then(volunteers => {
     if (volunteers.length > 0) {
-      await notifyCriticalNeed(
-        { ...needData, id: docRef.id },
-        volunteers
-      );
+      notifyCriticalNeed({ ...needData, id: docRef.id }, volunteers)
+        .catch(err => console.warn('Need notification failed:', err.message));
     }
-  } catch (err) {
-    console.warn('Failed to send need notifications:', err.message);
-  }
+  }).catch(err => console.warn('Failed to fetch volunteers for notification:', err.message));
 
   return docRef.id;
 };
@@ -149,38 +144,43 @@ export const createTask = async (taskData) => {
 
   // Update need status if linked
   if (taskData.needId) {
-    await updateDoc(doc(db, 'needs', taskData.needId), {
-      status: 'in_progress',
-    });
+    try {
+      await updateDoc(doc(db, 'needs', taskData.needId), {
+        status: 'in_progress',
+      });
+    } catch (err) {
+      console.warn('Failed to update need status:', err.message);
+    }
   }
 
-  // 🔔 Notify ALL volunteers about the new task
-  try {
-    const volunteers = await getAllVolunteers();
-    await notifyVolunteersOfNewTask(
-      { ...taskData, id: docRef.id },
-      volunteers
-    );
+  // 🔔 Fire-and-forget: Notify + auto-assign in background (don't block task creation)
+  getAllVolunteers().then(async (volunteers) => {
+    // Notify ALL volunteers
+    notifyVolunteersOfNewTask({ ...taskData, id: docRef.id }, volunteers)
+      .catch(err => console.warn('Task notification failed:', err.message));
 
-    // 🤖 AUTO-ASSIGN: Find the best-matching available volunteer
-    if (volunteers.length > 0 && taskData.autoAssign !== false) {
+    // 🤖 AUTO-ASSIGN to best-matching volunteer
+    if (volunteers.length > 0) {
       const bestVolunteer = findBestVolunteer(taskData, volunteers);
       if (bestVolunteer) {
-        await updateDoc(doc(db, 'tasks', docRef.id), {
-          assignedTo: bestVolunteer.uid,
-          status: 'assigned',
-          autoAssigned: true,
-        });
-        await updateDoc(doc(db, 'users', bestVolunteer.uid), {
-          tasksActive: increment(1),
-        });
-        await notifyTaskAssigned(taskData.title, bestVolunteer.uid, docRef.id);
-        console.log(`🤖 Auto-assigned task "${taskData.title}" to ${bestVolunteer.name}`);
+        try {
+          await updateDoc(doc(db, 'tasks', docRef.id), {
+            assignedTo: bestVolunteer.uid,
+            status: 'assigned',
+            autoAssigned: true,
+          });
+          await updateDoc(doc(db, 'users', bestVolunteer.uid), {
+            tasksActive: increment(1),
+          });
+          notifyTaskAssigned(taskData.title, bestVolunteer.uid, docRef.id)
+            .catch(() => {});
+          console.log(`🤖 Auto-assigned "${taskData.title}" to ${bestVolunteer.name}`);
+        } catch (err) {
+          console.warn('Auto-assign failed:', err.message);
+        }
       }
     }
-  } catch (err) {
-    console.warn('Failed to send task notifications / auto-assign:', err.message);
-  }
+  }).catch(err => console.warn('Background task processing failed:', err.message));
 
   return docRef.id;
 };
@@ -257,12 +257,9 @@ export const assignTask = async (taskId, volunteerId) => {
     tasksActive: increment(1),
   });
 
-  // 🔔 Notify the volunteer they've been assigned
-  try {
-    await notifyTaskAssigned(taskTitle, volunteerId, taskId);
-  } catch (err) {
-    console.warn('Failed to send assignment notification:', err.message);
-  }
+  // 🔔 Fire-and-forget notification
+  notifyTaskAssigned(taskTitle, volunteerId, taskId)
+    .catch(err => console.warn('Assignment notification failed:', err.message));
 };
 
 export const completeTask = async (taskId, volunteerId) => {
@@ -283,26 +280,21 @@ export const completeTask = async (taskId, volunteerId) => {
     tasksCompleted: increment(1),
   });
 
-  // 🔔 Notify admin that task is completed
-  try {
-    const volSnap = await getDoc(doc(db, 'users', volunteerId));
-    const volunteerName = volSnap.exists() ? volSnap.data().name : 'A volunteer';
-
-    // Find admin users to notify
-    const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
-    const adminSnap = await getDocs(adminQuery);
-    
-    for (const adminDoc of adminSnap.docs) {
-      await notifyTaskCompleted(
-        taskData.title || 'Unknown Task',
-        volunteerName,
-        adminDoc.id,
-        taskId
-      );
+  // 🔔 Fire-and-forget: Notify admin that task is completed
+  (async () => {
+    try {
+      const volSnap = await getDoc(doc(db, 'users', volunteerId));
+      const volunteerName = volSnap.exists() ? volSnap.data().name : 'A volunteer';
+      const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminSnap = await getDocs(adminQuery);
+      for (const adminDoc of adminSnap.docs) {
+        notifyTaskCompleted(taskData.title || 'Unknown Task', volunteerName, adminDoc.id, taskId)
+          .catch(() => {});
+      }
+    } catch (err) {
+      console.warn('Completion notification failed:', err.message);
     }
-  } catch (err) {
-    console.warn('Failed to send completion notification:', err.message);
-  }
+  })();
 
   // Check if all tasks for the need are completed
   if (taskData?.needId) {
@@ -337,12 +329,9 @@ export const acceptTask = async (taskId, volunteerId) => {
     tasksActive: increment(1),
   });
 
-  // 🔔 Notify the volunteer about their acceptance confirmation
-  try {
-    await notifyTaskAssigned(taskTitle, volunteerId, taskId);
-  } catch (err) {
-    console.warn('Failed to send acceptance notification:', err.message);
-  }
+  // 🔔 Fire-and-forget notification
+  notifyTaskAssigned(taskTitle, volunteerId, taskId)
+    .catch(err => console.warn('Acceptance notification failed:', err.message));
 };
 
 // ==================== USERS ====================
