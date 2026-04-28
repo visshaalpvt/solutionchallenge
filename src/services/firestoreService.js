@@ -55,17 +55,17 @@ export const createNeed = async (needData) => {
     createdAt: serverTimestamp(),
   });
 
-  // If critical/high urgency, notify volunteers in that zone
-  if (['critical', 'high'].includes(needData.urgencyLabel)) {
-    try {
-      const volunteers = await getAllVolunteers();
+  // Notify ALL volunteers about this need (zone-independent)
+  try {
+    const volunteers = await getAllVolunteers();
+    if (volunteers.length > 0) {
       await notifyCriticalNeed(
         { ...needData, id: docRef.id },
         volunteers
       );
-    } catch (err) {
-      console.warn('Failed to send need notifications:', err.message);
     }
+  } catch (err) {
+    console.warn('Failed to send need notifications:', err.message);
   }
 
   return docRef.id;
@@ -154,18 +154,79 @@ export const createTask = async (taskData) => {
     });
   }
 
-  // 🔔 Notify matching volunteers about the new task
+  // 🔔 Notify ALL volunteers about the new task
   try {
     const volunteers = await getAllVolunteers();
     await notifyVolunteersOfNewTask(
       { ...taskData, id: docRef.id },
       volunteers
     );
+
+    // 🤖 AUTO-ASSIGN: Find the best-matching available volunteer
+    if (volunteers.length > 0 && taskData.autoAssign !== false) {
+      const bestVolunteer = findBestVolunteer(taskData, volunteers);
+      if (bestVolunteer) {
+        await updateDoc(doc(db, 'tasks', docRef.id), {
+          assignedTo: bestVolunteer.uid,
+          status: 'assigned',
+          autoAssigned: true,
+        });
+        await updateDoc(doc(db, 'users', bestVolunteer.uid), {
+          tasksActive: increment(1),
+        });
+        await notifyTaskAssigned(taskData.title, bestVolunteer.uid, docRef.id);
+        console.log(`🤖 Auto-assigned task "${taskData.title}" to ${bestVolunteer.name}`);
+      }
+    }
   } catch (err) {
-    console.warn('Failed to send task notifications:', err.message);
+    console.warn('Failed to send task notifications / auto-assign:', err.message);
   }
 
   return docRef.id;
+};
+
+/**
+ * Simple volunteer scoring for auto-assignment.
+ * Finds the volunteer with the lowest active tasks who has matching skills.
+ */
+const findBestVolunteer = (task, volunteers) => {
+  if (!volunteers?.length) return null;
+
+  // Score each volunteer
+  const scored = volunteers.map(vol => {
+    let score = 0;
+    // Skill match (+40)
+    const requiredSkills = task.requiredSkills || [];
+    const volunteerSkills = vol.skills || [];
+    if (requiredSkills.length > 0) {
+      const matchCount = requiredSkills.filter(s => volunteerSkills.includes(s)).length;
+      score += Math.round(40 * (matchCount / requiredSkills.length));
+    } else {
+      score += 20; // No skills required, partial score for everyone
+    }
+    // Zone match (+20)
+    if (task.zone && vol.zone && task.zone === vol.zone) {
+      score += 20;
+    }
+    // Low workload (+30) — prefer volunteers with fewer active tasks
+    const activeTasks = vol.tasksActive || 0;
+    if (activeTasks === 0) score += 30;
+    else if (activeTasks <= 2) score += 15;
+    else if (activeTasks <= 4) score += 5;
+    // Availability (+10)
+    if ((vol.availability || []).length >= 3) score += 10;
+
+    return { ...vol, autoScore: score };
+  });
+
+  // Sort by score descending, then by fewest active tasks
+  scored.sort((a, b) => {
+    if (b.autoScore !== a.autoScore) return b.autoScore - a.autoScore;
+    return (a.tasksActive || 0) - (b.tasksActive || 0);
+  });
+
+  // Return the best candidate (only if score > 0)
+  return scored[0]?.autoScore > 0 ? scored[0] : null;
 };
 
 export const subscribeToTasks = (callback) => {

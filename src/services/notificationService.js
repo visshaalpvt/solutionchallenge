@@ -46,47 +46,22 @@ export const createNotification = async (notification) => {
 };
 
 /**
- * Notify all matching volunteers when a new task is created.
- * Matches by zone and/or skills.
+ * Notify ALL volunteers when a new task is created.
+ * Zone-independent — every volunteer gets alerted.
  */
 export const notifyVolunteersOfNewTask = async (task, volunteers) => {
   if (!db || !volunteers?.length) return;
 
   const batch = writeBatch(db);
-  let count = 0;
 
+  // Notify EVERY volunteer regardless of zone or skills
   for (const vol of volunteers) {
-    // Match by zone OR skills
-    const zoneMatch = task.zone && vol.zone && task.zone === vol.zone;
-    const skillMatch = (task.requiredSkills || []).some(skill =>
-      (vol.skills || []).includes(skill)
-    );
-
-    if (zoneMatch || skillMatch) {
-      const notifRef = doc(collection(db, 'notifications'));
-      batch.set(notifRef, {
-        type: 'new_task',
-        title: '🆕 New Task Available',
-        message: `"${task.title}" in ${task.zone || 'your area'} needs a volunteer${task.requiredSkills?.length ? ` with ${task.requiredSkills[0]}` : ''}.`,
-        recipientId: vol.uid || vol.id,
-        relatedTaskId: task.id || '',
-        taskTitle: task.title,
-        taskZone: task.zone || '',
-        read: false,
-        createdAt: serverTimestamp(),
-      });
-      count++;
-    }
-  }
-
-  // Also create a general notification for ALL volunteers
-  if (count === 0) {
     const notifRef = doc(collection(db, 'notifications'));
     batch.set(notifRef, {
       type: 'new_task',
       title: '🆕 New Task Available',
-      message: `"${task.title}" in ${task.zone || 'Unknown Zone'} needs volunteers.`,
-      recipientId: 'all_volunteers',
+      message: `"${task.title}" in ${task.zone || 'your area'} needs a volunteer${task.requiredSkills?.length ? ` with ${task.requiredSkills[0]}` : ''}. Accept it now!`,
+      recipientId: vol.uid || vol.id,
       relatedTaskId: task.id || '',
       taskTitle: task.title,
       taskZone: task.zone || '',
@@ -97,7 +72,7 @@ export const notifyVolunteersOfNewTask = async (task, volunteers) => {
 
   try {
     await batch.commit();
-    console.log(`Notified ${count || 'all'} volunteers about new task: ${task.title}`);
+    console.log(`🔔 Notified ALL ${volunteers.length} volunteers about new task: ${task.title}`);
   } catch (err) {
     console.error('Failed to batch notify volunteers:', err);
   }
@@ -132,34 +107,42 @@ export const notifyTaskCompleted = async (taskTitle, volunteerName, adminId, tas
 };
 
 /**
- * Notify relevant volunteers when a critical need is reported
+ * Notify ALL volunteers when a critical/high need is reported
+ * Zone-independent — every volunteer gets alerted.
  */
 export const notifyCriticalNeed = async (need, volunteers) => {
   if (!db || !volunteers?.length) return;
-  if (!['critical', 'high'].includes(need.urgencyLabel)) return;
 
   const batch = writeBatch(db);
 
+  const urgencyEmoji = {
+    critical: '🚨',
+    high: '⚠️',
+    medium: '📋',
+    low: 'ℹ️',
+  };
+
+  const emoji = urgencyEmoji[need.urgencyLabel] || '📋';
+
+  // Notify ALL volunteers regardless of zone
   for (const vol of volunteers) {
-    const zoneMatch = need.zone && vol.zone && need.zone === vol.zone;
-    if (zoneMatch || need.urgencyLabel === 'critical') {
-      const notifRef = doc(collection(db, 'notifications'));
-      batch.set(notifRef, {
-        type: 'need_alert',
-        title: need.urgencyLabel === 'critical' ? '🚨 Critical Need Alert' : '⚠️ High Priority Need',
-        message: `${need.title} reported in ${need.zone || 'your area'}. Urgency: ${need.urgencyScore}/10.`,
-        recipientId: vol.uid || vol.id,
-        relatedNeedId: need.id || '',
-        needTitle: need.title,
-        urgencyLabel: need.urgencyLabel,
-        read: false,
-        createdAt: serverTimestamp(),
-      });
-    }
+    const notifRef = doc(collection(db, 'notifications'));
+    batch.set(notifRef, {
+      type: 'need_alert',
+      title: `${emoji} New Community Need: ${(need.urgencyLabel || 'medium').toUpperCase()}`,
+      message: `${need.title} reported in ${need.zone || 'your area'}. Urgency: ${need.urgencyScore}/10. Your help is needed!`,
+      recipientId: vol.uid || vol.id,
+      relatedNeedId: need.id || '',
+      needTitle: need.title,
+      urgencyLabel: need.urgencyLabel,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
   }
 
   try {
     await batch.commit();
+    console.log(`🚨 Notified ALL ${volunteers.length} volunteers about ${need.urgencyLabel} need: ${need.title}`);
   } catch (err) {
     console.error('Failed to notify about critical need:', err);
   }

@@ -11,7 +11,14 @@ const TaskCard = ({ task, onAssign, onAccept, onComplete, volunteers = [], showA
   return (
     <Card className="flex flex-col h-full border-slate-100 shadow-sm hover:shadow-xl transition-all group">
       <div className="flex items-start justify-between mb-4">
-        <StatusBadge status={task.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={task.status} />
+          {task.autoAssigned && (
+            <span className="px-2 py-0.5 rounded-lg bg-purple-50 text-purple-600 text-[9px] font-black uppercase border border-purple-100 animate-pulse">
+              🤖 Auto
+            </span>
+          )}
+        </div>
         {task.urgencyScore && (
           <div className="flex flex-col items-end">
              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Score</span>

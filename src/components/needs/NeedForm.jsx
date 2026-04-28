@@ -163,7 +163,7 @@ const NeedForm = ({ isOpen, onClose }) => {
               <div>
                 <p className="text-xs font-bold text-indigo-900">AI-Powered Prioritization</p>
                 <p className="text-[10px] text-indigo-700/70 font-medium mt-1 leading-relaxed">
-                  Our Gemini AI engine will evaluate this report to determine urgency, impact potential, and resource requirements automatically.
+                  Our AI engine (Groq LLaMA + Gemini) will evaluate this report to determine urgency, impact potential, and resource requirements automatically.
                 </p>
               </div>
             </div>
@@ -173,7 +173,7 @@ const NeedForm = ({ isOpen, onClose }) => {
                 Cancel
               </Button>
               <Button type="submit" variant="primary" loading={loading} icon={Sparkles} className="flex-1 rounded-2xl py-4 font-black shadow-xl shadow-indigo-100">
-                {loading ? 'AI analyzing situation...' : 'Analyze with Gemini AI'}
+                {loading ? 'AI analyzing situation...' : 'Analyze with AI'}
               </Button>
             </div>
           </>
@@ -194,6 +194,11 @@ const NeedForm = ({ isOpen, onClose }) => {
                 <div className="flex items-center gap-3 mb-6">
                   <Sparkles className="w-5 h-5 text-indigo-600" />
                   <h3 className="text-sm font-black text-indigo-600 uppercase tracking-widest">AI Assessment Result</h3>
+                  {aiResult?.aiSource && (
+                    <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-[9px] font-bold text-indigo-600 uppercase border border-indigo-100">
+                      via {aiResult.aiSource}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-8 mb-8">

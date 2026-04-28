@@ -1,13 +1,49 @@
 /**
- * Service for Groq API integration (Fallback for Gemini)
+ * Groq API Service — Primary AI Engine
+ * Uses LLaMA 3 8B via Groq Cloud for fast inference
  */
 
-export const scoreNeedWithGroq = async (title, description, category = '') => {
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+const getApiKey = () => {
   const apiKey = import.meta.env.VITE_GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key') {
     throw new Error('Groq API key not configured');
   }
+  return apiKey;
+};
 
+/**
+ * Call Groq API with a prompt
+ */
+const callGroq = async (messages, temperature = 0.1) => {
+  const response = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getApiKey()}`,
+    },
+    body: JSON.stringify({
+      model: 'llama3-8b-8192',
+      messages,
+      temperature,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Groq API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+};
+
+/**
+ * Score a community need using Groq/LLaMA
+ */
+export const scoreNeedWithGroq = async (title, description, category = '') => {
   const prompt = `You are an AI assistant helping an NGO prioritize community needs.
     Analyze the following community need and provide:
     1. An urgency score from 1 to 10 (10 being most urgent)
@@ -26,47 +62,80 @@ export const scoreNeedWithGroq = async (title, description, category = '') => {
       "aiSummary": "<2-3 sentence summary with recommended action>"
     }`;
 
+  const text = await callGroq([{ role: 'user', content: prompt }]);
+
+  // Parse JSON from response
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Invalid response format from Groq');
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  return {
+    urgencyScore: Math.max(1, Math.min(10, Math.round(parsed.urgencyScore || 5))),
+    urgencyLabel: (parsed.urgencyLabel || 'medium').toLowerCase(),
+    aiSummary: parsed.aiSummary || 'No summary available.',
+    aiSource: 'groq'
+  };
+};
+
+/**
+ * Get a general AI insight/recommendation
+ * Used across dashboards for contextual AI advice
+ */
+export const getAIInsight = async (context) => {
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'llama3-8b-8192',
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.1,
-      }),
-    });
+    const prompt = `You are SmartAlloc AI, an assistant for an NGO volunteer coordination platform.
+    Based on the following context, provide a brief, actionable insight (2-3 sentences max).
+    Be specific and practical. Don't use generic advice.
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Groq API call failed');
-    }
+    Context: ${context}
 
-    const data = await response.json();
-    const text = data.choices[0].message.content;
+    Respond with ONLY the insight text, no formatting or labels.`;
 
-    // Parse JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Invalid response format from Groq');
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    return {
-      urgencyScore: Math.max(1, Math.min(10, Math.round(parsed.urgencyScore || 5))),
-      urgencyLabel: (parsed.urgencyLabel || 'medium').toLowerCase(),
-      aiSummary: parsed.aiSummary || 'No summary available.',
-      aiSource: 'groq'
-    };
+    const text = await callGroq([{ role: 'user', content: prompt }], 0.3);
+    return text.trim();
   } catch (err) {
-    console.error('Groq Service Error:', err);
-    throw err;
+    console.warn('AI insight failed:', err.message);
+    return null;
   }
+};
+
+/**
+ * Get AI-powered volunteer recommendation summary
+ */
+export const getMatchInsight = async (taskTitle, volunteerName, matchScore) => {
+  try {
+    const prompt = `You are SmartAlloc AI. A volunteer matching system scored ${volunteerName} at ${matchScore}/100 for the task "${taskTitle}". 
+    Write ONE sentence explaining why this is a ${matchScore >= 70 ? 'strong' : matchScore >= 40 ? 'moderate' : 'potential'} match and any recommendation.
+    Be brief and specific.`;
+
+    const text = await callGroq([{ role: 'user', content: prompt }], 0.3);
+    return text.trim();
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Generate a task description suggestion from a need
+ */
+export const suggestTaskFromNeed = async (needTitle, needDescription, needCategory) => {
+  try {
+    const prompt = `You are SmartAlloc AI. An NGO has a community need:
+    Title: ${needTitle}
+    Description: ${needDescription}
+    Category: ${needCategory}
+
+    Suggest a practical task title and description (2-3 sentences) that a volunteer can act on.
+    Respond with JSON: {"taskTitle": "...", "taskDescription": "..."}`;
+
+    const text = await callGroq([{ role: 'user', content: prompt }], 0.3);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch {
+    // silent fail
+  }
+  return null;
 };
