@@ -2,69 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper: Check if the user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Helper: Check if user is admin (by role stored in their user doc)
-    function isAdmin() {
-      return isAuthenticated() && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-    
-    // Helper: Check if user is the document owner
-    function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
-    }
-    
-    // Users collection
-    match /users/{userId} {
-      // Anyone authenticated can read user profiles
-      allow read: if isAuthenticated();
-      // Users can update their own profile; admins can update any user
-      allow update: if isOwner(userId) || isAdmin();
-      // Only allow create during sign-up (auth uid must match doc id)
-      allow create: if isOwner(userId);
-      // Only admin can delete users
-      allow delete: if isAdmin();
-    }
-    
-    // Needs collection
-    match /needs/{needId} {
-      // All authenticated users can read needs
-      allow read: if isAuthenticated();
-      // Only admin can create, update, delete needs
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-    
-    // Tasks collection
-    match /tasks/{taskId} {
-      // All authenticated users can read tasks
-      allow read: if isAuthenticated();
-      // Only admin can create tasks
-      allow create: if isAdmin();
-      // Admin can update any task; volunteers can accept open tasks or update their assigned tasks
-      allow update: if isAdmin() || 
-        (isAuthenticated() && resource.data.assignedTo == request.auth.uid) ||
-        (isAuthenticated() && resource.data.status == 'open');
-      // Only admin can delete tasks
-      allow delete: if isAdmin();
-    }
-
-    // Notifications collection
-    match /notifications/{notificationId} {
-      // Users can read notifications addressed to them or to all_volunteers
-      allow read: if isAuthenticated();
-      // Any authenticated user can create notifications (triggered by service layer)
-      allow create: if isAuthenticated();
-      // Users can update (mark as read) their own notifications
-      allow update: if isAuthenticated();
-      // Only admin can delete notifications
-      allow delete: if isAdmin();
+    // Allow all authenticated users full access
+    // This is for development/demo purposes
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

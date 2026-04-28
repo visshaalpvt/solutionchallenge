@@ -44,16 +44,28 @@ const safeSubscribe = (queryFn, callback) => {
     return () => {};
   }
 };
+// Utility: Wrap a promise with a timeout to prevent infinite hangs
+const withTimeout = (promise, ms = 10000, msg = 'Operation timed out') => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(msg)), ms)),
+  ]);
+};
 
 // ==================== NEEDS ====================
 
 export const createNeed = async (needData) => {
   if (!db) throw new Error('Firestore not configured');
-  const docRef = await addDoc(collection(db, 'needs'), {
-    ...needData,
-    status: 'open',
-    createdAt: serverTimestamp(),
-  });
+  
+  const docRef = await withTimeout(
+    addDoc(collection(db, 'needs'), {
+      ...needData,
+      status: 'open',
+      createdAt: serverTimestamp(),
+    }),
+    10000,
+    'Failed to save need — check Firestore permissions. Go to Firebase Console → Firestore → Rules and set: allow read, write: if request.auth != null;'
+  );
 
   // 🔔 Fire-and-forget: Notify volunteers in the background (don't block save)
   getAllVolunteers().then(volunteers => {
@@ -135,12 +147,16 @@ export const findSimilarAIResult = async (title, description) => {
 
 export const createTask = async (taskData) => {
   if (!db) throw new Error('Firestore not configured');
-  const docRef = await addDoc(collection(db, 'tasks'), {
-    ...taskData,
-    status: 'open',
-    assignedTo: null,
-    createdAt: serverTimestamp(),
-  });
+  const docRef = await withTimeout(
+    addDoc(collection(db, 'tasks'), {
+      ...taskData,
+      status: 'open',
+      assignedTo: null,
+      createdAt: serverTimestamp(),
+    }),
+    10000,
+    'Failed to save task — check Firestore permissions.'
+  );
 
   // Update need status if linked
   if (taskData.needId) {

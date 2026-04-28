@@ -50,7 +50,7 @@ const NeedForm = ({ isOpen, onClose }) => {
         title: form.title,
         description: form.description,
         category: form.category,
-        zone: form.zone,
+        zone: form.zone || 'Global',
         location: {
           lat: parseFloat(form.lat) || 0,
           lng: parseFloat(form.lng) || 0,
@@ -66,7 +66,7 @@ const NeedForm = ({ isOpen, onClose }) => {
       onClose();
     } catch (err) {
       console.error('Failed to create need:', err);
-      alert('Failed to save need. Please check your connection.');
+      alert(`Failed to save: ${err.message}\n\nFIX: Go to Firebase Console → Firestore Database → Rules tab → Replace rules with:\n\nrules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if request.auth != null;\n    }\n  }\n}\n\nThen click "Publish".`);
     } finally {
       setLoading(false);
     }

@@ -53,7 +53,7 @@ const TaskForm = ({ isOpen, onClose, prefillNeed = null }) => {
       onClose();
     } catch (err) {
       console.error('Failed to create task:', err);
-      alert('Failed to create task. Please check your connection.');
+      alert(`Failed to create task: ${err.message}\n\nIf this keeps happening, update your Firestore Rules in Firebase Console.`);
     } finally {
       setLoading(false);
     }
