@@ -5,8 +5,8 @@ import Badge, { StatusBadge } from '../ui/Badge';
 import Button from '../ui/Button';
 
 const NeedCard = ({ need, onConvertToTask, showActions = true }) => {
-  const timeAgo = need.createdAt?.toDate
-    ? getTimeAgo(need.createdAt.toDate())
+  const timeAgo = need.createdAt
+    ? getTimeAgo(need.createdAt?.toDate ? need.createdAt.toDate() : new Date(need.createdAt))
     : 'Just now';
 
   return (

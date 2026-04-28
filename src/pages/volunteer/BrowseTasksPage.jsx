@@ -23,8 +23,11 @@ const BrowseTasksPage = () => {
   const [accepting, setAccepting] = useState(false);
   const [successTask, setSuccessTask] = useState(null);
 
+  // Show tasks that are either open (available) or auto-assigned to this volunteer
   const openTasks = tasks.filter(t => {
-    if (t.status !== 'open') return false;
+    const isOpen = t.status === 'open';
+    const isAutoAssignedToMe = t.autoAssigned && t.assignedTo === user?.uid && t.status === 'assigned';
+    if (!isOpen && !isAutoAssignedToMe) return false;
     if (zoneFilter !== 'all' && t.zone !== zoneFilter) return false;
     if (skillFilter !== 'all' && !(t.requiredSkills || []).includes(skillFilter)) return false;
     if (search) {

@@ -24,6 +24,10 @@ const getCollection = (name) => {
 const saveCollection = (name, data) => {
   localStorage.setItem(DB_PREFIX + name, JSON.stringify(data));
   // Fire all listeners for this collection
+  notifyListeners(name, data);
+};
+
+const notifyListeners = (name, data) => {
   (listeners[name] || []).forEach(cb => {
     try { cb([...data]); } catch (e) { console.warn('Listener error:', e); }
   });
@@ -39,6 +43,27 @@ const subscribe = (name, callback) => {
     listeners[name] = (listeners[name] || []).filter(cb => cb !== callback);
   };
 };
+
+// 🔄 CROSS-TAB SYNC: Listen for localStorage changes from other tabs
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key?.startsWith(DB_PREFIX)) {
+      const collectionName = e.key.replace(DB_PREFIX, '');
+      try {
+        const newData = JSON.parse(e.newValue) || [];
+        notifyListeners(collectionName, newData);
+      } catch {}
+    }
+  });
+
+  // 🔄 PERIODIC SYNC: Poll localStorage every 2 seconds for same-tab updates
+  setInterval(() => {
+    Object.keys(listeners).forEach(name => {
+      const current = getCollection(name);
+      notifyListeners(name, current);
+    });
+  }, 2000);
+}
 
 // ==================== NEEDS ====================
 

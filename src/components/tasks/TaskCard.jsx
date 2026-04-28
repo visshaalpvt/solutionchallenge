@@ -6,7 +6,9 @@ import Button from '../ui/Button';
 
 const TaskCard = ({ task, onAssign, onAccept, onComplete, volunteers = [], showActions = true }) => {
   const assignedVol = volunteers.find(v => v.uid === task.assignedTo);
-  const timeAgo = task.createdAt?.toDate ? getTimeAgo(task.createdAt.toDate()) : 'Just now';
+  const timeAgo = task.createdAt
+    ? getTimeAgo(task.createdAt?.toDate ? task.createdAt.toDate() : new Date(task.createdAt))
+    : 'Just now';
 
   return (
     <Card className="flex flex-col h-full border-slate-100 shadow-sm hover:shadow-xl transition-all group">
