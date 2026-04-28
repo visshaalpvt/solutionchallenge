@@ -23,7 +23,8 @@ const VolunteerDashboard = () => {
   const myTasks = tasks.filter(t => t.assignedTo === user?.uid);
   const activeTasks = myTasks.filter(t => t.status === 'assigned');
   const completedTasks = myTasks.filter(t => t.status === 'completed');
-  const openTasks = tasks.filter(t => t.status === 'open');
+  // Show ALL tasks that are not completed and not assigned to me as "Available"
+  const openTasks = tasks.filter(t => t.status !== 'completed' && t.assignedTo !== user?.uid);
   const nearbyNeeds = needs.filter(n => n.status === 'open').slice(0, 5);
   const unreadNotifs = notifications.filter(n => !n.read).slice(0, 5);
 

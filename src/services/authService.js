@@ -1,6 +1,6 @@
-import { auth, googleProvider, isFirebaseConfigured } from '../config/firebase';
+import { auth, db, googleProvider, isFirebaseConfigured } from '../config/firebase';
 import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
-import { createOrUpdateUser, getUser } from './firestoreService';
+import { createOrUpdateUser } from './firestoreService';
 
 const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
 
@@ -17,14 +17,7 @@ const determineRole = (email) => {
 
 export const signInWithGoogle = async () => {
   if (!isFirebaseConfigured || !auth) {
-    // Demo fallback
-    const demoUser = {
-      uid: 'demo-admin-001', name: 'Demo Admin', email: 'admin@demo.com',
-      photoURL: '', role: 'admin', skills: [], availability: [],
-      zone: 'Central Zone', tasksCompleted: 12, tasksActive: 3,
-    };
-    await createOrUpdateUser(demoUser);
-    return demoUser;
+    throw new Error('Firebase not configured');
   }
 
   const result = await signInWithPopup(auth, googleProvider);
@@ -41,18 +34,8 @@ export const signInWithGoogle = async () => {
     tasksCompleted: 0, tasksActive: 0,
   };
 
-  // Check if user already exists in localStorage
-  const existing = await getUser(user.uid);
-  if (existing) {
-    // Update login info + ensure role is correct
-    const merged = { ...existing, ...userData, role: correctRole };
-    await createOrUpdateUser(merged);
-    return merged;
-  }
-
-  // New user — save to localStorage
-  await createOrUpdateUser(userData);
-  return userData;
+  // Save/Update user in Firestore
+  return createOrUpdateUser(userData);
 };
 
 export const signOutUser = async () => {
@@ -69,26 +52,21 @@ export const onAuthChange = (callback) => {
   return onAuthStateChanged(auth, async (user) => {
     if (user) {
       const correctRole = determineRole(user.email);
-
       const basicData = {
         uid: user.uid,
         name: user.displayName || 'Unknown',
         email: user.email,
         photoURL: user.photoURL || '',
         role: correctRole,
-        skills: [], availability: [], zone: '',
-        tasksCompleted: 0, tasksActive: 0,
       };
 
-      // Check localStorage for existing user data
-      const existing = await getUser(user.uid);
-      if (existing) {
-        const merged = { ...basicData, ...existing, uid: user.uid, role: correctRole };
-        await createOrUpdateUser(merged);
-        callback(merged);
-      } else {
-        await createOrUpdateUser(basicData);
-        callback(basicData);
+      // Ensure user exists in DB and get full profile
+      try {
+        const fullProfile = await createOrUpdateUser(basicData);
+        callback(fullProfile);
+      } catch (err) {
+        console.warn('DB profile fetch failed, using basic auth data:', err.message);
+        callback({ ...basicData, role: correctRole });
       }
     } else {
       callback(null);
