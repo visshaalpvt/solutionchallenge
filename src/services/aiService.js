@@ -1,6 +1,6 @@
 import { findSimilarAIResult } from './firestoreService';
 
-export const scoreNeed = async (title, description, category = '') => {
+export const scoreNeed = async (title, description) => {
   // STEP 1: CACHE CHECK (Deduplication)
   try {
     const cachedResult = await findSimilarAIResult(title, description);

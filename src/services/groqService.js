@@ -8,7 +8,7 @@ const callAIProxy = async (type, prompt) => {
   return data.result;
 };
 
-export const scoreNeedWithGroq = async (title, description, category = '') => {
+export const scoreNeedWithGroq = async (title, description) => {
   const prompt = `NGO Priority Analysis. JSON output only: {"urgencyScore": <1-10>, "urgencyLabel": "critical|high|medium|low", "aiSummary": "2-sentence summary"}. Need: ${title}, ${description}`;
   const text = await callAIProxy('groq', prompt);
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -40,7 +40,7 @@ export const getMatchInsight = async (taskTitle, volunteerName, matchScore) => {
   }
 };
 
-export const suggestTaskFromNeed = async (needTitle, needDescription, needCategory) => {
+export const suggestTaskFromNeed = async (needTitle, needDescription) => {
   try {
     const prompt = `NGO AI. Suggest task title and 2-sentence description for need: ${needTitle}, ${needDescription}. JSON: {"taskTitle": "...", "taskDescription": "..."}`;
     const text = await callAIProxy('groq', prompt);
