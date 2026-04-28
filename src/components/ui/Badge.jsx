@@ -37,10 +37,13 @@ export const StatusBadge = ({ status, className = '' }) => {
     assigned: { label: 'Assigned', variant: 'primary' },
     completed: { label: 'Completed', variant: 'success' },
     cancelled: { label: 'Cancelled', variant: 'slate' },
+    'in_progress': { label: 'In Progress', variant: 'warning' },
     'in-progress': { label: 'In Progress', variant: 'warning' },
+    resolved: { label: 'Resolved', variant: 'success' },
   };
 
-  const config = statusConfig[status.toLowerCase()] || statusConfig.open;
+  const safeStatus = (status || 'open').toLowerCase();
+  const config = statusConfig[safeStatus] || statusConfig.open;
 
   return (
     <Badge variant={config.variant} className={className}>

@@ -12,6 +12,17 @@ const withTimeout = (promise, ms) => {
   ]);
 };
 
+/**
+ * Determine role based on email.
+ * Only the configured ADMIN_EMAIL gets 'admin', everyone else is 'volunteer'.
+ */
+const determineRole = (email) => {
+  if (ADMIN_EMAIL && email === ADMIN_EMAIL) {
+    return 'admin';
+  }
+  return 'volunteer';
+};
+
 export const signInWithGoogle = async () => {
   if (!isFirebaseConfigured || !auth) {
     return {
@@ -29,7 +40,7 @@ export const signInWithGoogle = async () => {
     name: user.displayName || 'Unknown',
     email: user.email,
     photoURL: user.photoURL || '',
-    role: (ADMIN_EMAIL && user.email === ADMIN_EMAIL) ? 'admin' : 'admin',
+    role: determineRole(user.email),
     skills: [], availability: [], zone: '',
     tasksCompleted: 0, tasksActive: 0,
   };
@@ -41,23 +52,17 @@ export const signInWithGoogle = async () => {
       const userSnap = await withTimeout(getDoc(userRef), 4000);
 
       if (userSnap.exists()) {
-        return { ...userData, ...userSnap.data(), uid: user.uid };
+        const existingData = userSnap.data();
+        // Always re-derive role from email to prevent stale roles in DB
+        const correctRole = determineRole(user.email);
+        // If role in DB is wrong, fix it
+        if (existingData.role !== correctRole) {
+          await setDoc(userRef, { role: correctRole }, { merge: true }).catch(() => {});
+        }
+        return { ...userData, ...existingData, uid: user.uid, role: correctRole };
       }
 
-      // New user — check if first user
-      let isAdmin = true;
-      if (ADMIN_EMAIL) {
-        isAdmin = user.email === ADMIN_EMAIL;
-      } else {
-        try {
-          const { getDocs, collection, limit, query } = await import('firebase/firestore');
-          const usersQuery = query(collection(db, 'users'), limit(1));
-          const usersSnap = await withTimeout(getDocs(usersQuery), 3000);
-          isAdmin = usersSnap.empty;
-        } catch { isAdmin = true; }
-      }
-
-      userData.role = isAdmin ? 'admin' : 'volunteer';
+      // New user — save to Firestore
       await setDoc(userRef, { ...userData, createdAt: serverTimestamp() }).catch(() => {});
     }
   } catch (error) {
@@ -80,12 +85,15 @@ export const onAuthChange = (callback) => {
 
   return onAuthStateChanged(auth, async (user) => {
     if (user) {
+      // Always derive role from email — single source of truth
+      const correctRole = determineRole(user.email);
+
       const basicData = {
         uid: user.uid,
         name: user.displayName || 'Unknown',
         email: user.email,
         photoURL: user.photoURL || '',
-        role: 'admin',
+        role: correctRole,
         skills: [], availability: [], zone: '',
         tasksCompleted: 0, tasksActive: 0,
       };
@@ -96,7 +104,12 @@ export const onAuthChange = (callback) => {
           const userRef = doc(db, 'users', user.uid);
           const userSnap = await withTimeout(getDoc(userRef), 3000);
           if (userSnap.exists()) {
-            callback({ ...basicData, ...userSnap.data(), uid: user.uid });
+            const existingData = userSnap.data();
+            // Fix stale role in DB if needed
+            if (existingData.role !== correctRole) {
+              await setDoc(userRef, { role: correctRole }, { merge: true }).catch(() => {});
+            }
+            callback({ ...basicData, ...existingData, uid: user.uid, role: correctRole });
             return;
           }
         }
@@ -104,7 +117,7 @@ export const onAuthChange = (callback) => {
         console.warn('Firestore read timeout/error, using auth data:', error.message);
       }
 
-      // Fallback to basic Firebase Auth data
+      // Fallback to basic Firebase Auth data with correct role
       callback(basicData);
     } else {
       callback(null);

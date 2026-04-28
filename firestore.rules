@@ -8,7 +8,7 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Helper: Check if user is admin
+    // Helper: Check if user is admin (by role stored in their user doc)
     function isAdmin() {
       return isAuthenticated() && 
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
@@ -23,8 +23,8 @@ service cloud.firestore {
     match /users/{userId} {
       // Anyone authenticated can read user profiles
       allow read: if isAuthenticated();
-      // Users can update their own profile (skills, availability, zone)
-      allow update: if isOwner(userId);
+      // Users can update their own profile (skills, availability, zone, role)
+      allow update: if isOwner(userId) || isAdmin();
       // Only allow create during sign-up (auth uid must match doc id)
       allow create: if isOwner(userId);
       // Only admin can delete users
@@ -47,7 +47,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Only admin can create tasks
       allow create: if isAdmin();
-      // Admin can update any task; volunteers can update only their assigned tasks
+      // Admin can update any task; volunteers can accept open tasks or update their assigned tasks
       allow update: if isAdmin() || 
         (isAuthenticated() && resource.data.assignedTo == request.auth.uid) ||
         (isAuthenticated() && resource.data.status == 'open');
